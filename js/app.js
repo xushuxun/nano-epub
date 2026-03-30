@@ -35,14 +35,22 @@ document.addEventListener('alpine:init', () => {
         
         get fontSize() { return this.config.fontSize; },
         set fontSize(val) { 
-            this.config.fontSize = Math.max(12, Math.min(28, parseInt(val) || 18)); 
-            this.saveConfig();
+            const newVal = Math.max(12, Math.min(28, parseInt(val) || 18));
+            if (this.config.fontSize !== newVal) {
+                this.config.fontSize = newVal;
+                this.saveConfig();
+                this.applyStyles();  // 立即应用样式
+            }
         },
         
         get readerWidth() { return this.config.readerWidth; },
         set readerWidth(val) { 
-            this.config.readerWidth = Math.max(400, Math.min(1200, parseInt(val) || 800)); 
-            this.saveConfig();
+            const newVal = Math.max(400, Math.min(1200, parseInt(val) || 800));
+            if (this.config.readerWidth !== newVal) {
+                this.config.readerWidth = newVal;
+                this.saveConfig();
+                this.resizeViewer();  // 立即调整宽度
+            }
         },
         
         get themeIcon() {
@@ -95,15 +103,6 @@ document.addEventListener('alpine:init', () => {
         init() {
             // 加载保存的配置
             this.loadConfig();
-            
-            // 监听配置变化，自动应用
-            this.$watch('config.fontSize', () => {
-                this.applyStyles();
-            });
-            
-            this.$watch('config.readerWidth', () => {
-                this.resizeViewer();
-            });
             
             // 页面关闭前保存进度
             window.addEventListener('beforeunload', () => {
@@ -237,7 +236,10 @@ document.addEventListener('alpine:init', () => {
         
         // ===== 样式 & 主题 =====
         applyStyles() {
-            if (!this.rendition) return;
+            if (!this.rendition) {
+                console.log('applyStyles: rendition 未就绪');
+                return;
+            }
             
             const colors = {
                 light: { bg: '#fff', color: '#333' },
@@ -245,19 +247,34 @@ document.addEventListener('alpine:init', () => {
                 sepia: { bg: '#f4ecd8', color: '#5b4636' }
             }[this.theme];
             
+            console.log('应用样式:', { fontSize: this.fontSize, theme: this.theme });
+            
+            // 注册主题（包含字体大小）
             this.rendition.themes.register('custom', {
                 body: {
-                    'font-family': '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-                    'font-size': `${this.fontSize}px`,
-                    'line-height': '1.8',
+                    'font-family': '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Microsoft YaHei", sans-serif !important',
+                    'font-size': `${this.fontSize}px !important`,
+                    'line-height': '1.8 !important',
                     'background': colors.bg,
                     'color': colors.color
                 },
-                '*': { 'max-width': '100%' },
-                'img': { 'max-width': '100%', 'height': 'auto' }
+                'p, div, span, h1, h2, h3, h4, h5, h6': {
+                    'font-size': `${this.fontSize}px !important`
+                },
+                '*': { 
+                    'max-width': '100% !important'
+                },
+                'img': { 
+                    'max-width': '100% !important', 
+                    'height': 'auto !important' 
+                }
             });
             
+            // 应用主题
             this.rendition.themes.select('custom');
+            
+            // 额外调用 fontSize 确保生效
+            this.rendition.themes.fontSize(`${this.fontSize}px`);
         },
         
         cycleTheme() {
@@ -265,7 +282,7 @@ document.addEventListener('alpine:init', () => {
             const idx = themes.indexOf(this.theme);
             this.config.theme = themes[(idx + 1) % themes.length];
             this.saveConfig();
-            this.$nextTick(() => this.applyStyles());
+            this.applyStyles();  // 立即应用主题
         },
         
         // 重置所有配置
