@@ -10,6 +10,7 @@ document.addEventListener('alpine:init', () => {
         book: null,
         rendition: null,
         bookTitle: '',
+        bookIdentifier: null,  // 用于保存阅读进度
         
         // 章节
         spineItems: [],
@@ -20,32 +21,99 @@ document.addEventListener('alpine:init', () => {
         dragOver: false,
         settingsOpen: false,
         
-        // 设置
-        theme: localStorage.getItem('nano-theme') || 'light',
-        fontSize: parseInt(localStorage.getItem('nano-fontsize')) || 18,
-        readerWidth: parseInt(localStorage.getItem('nano-width')) || 800,
+        // ===== 配置项（带持久化） =====
+        config: {
+            theme: 'light',
+            fontSize: 18,
+            readerWidth: 800,
+            readingProgress: {}  // 每本书的阅读进度 { bookId: spineIndex }
+        },
         
-        // 主题图标
+        // ===== 计算属性 =====
+        get theme() { return this.config.theme; },
+        set theme(val) { this.config.theme = val; this.saveConfig(); },
+        
+        get fontSize() { return this.config.fontSize; },
+        set fontSize(val) { 
+            this.config.fontSize = Math.max(12, Math.min(28, parseInt(val) || 18)); 
+            this.saveConfig();
+        },
+        
+        get readerWidth() { return this.config.readerWidth; },
+        set readerWidth(val) { 
+            this.config.readerWidth = Math.max(400, Math.min(1200, parseInt(val) || 800)); 
+            this.saveConfig();
+        },
+        
         get themeIcon() {
             return { light: '☀', dark: '☾', sepia: '☕' }[this.theme];
         },
         
-        // 阅读栏样式
         get viewerStyle() {
             return { maxWidth: this.readerWidth + 'px' };
         },
         
+        // ===== 配置管理 =====
+        loadConfig() {
+            try {
+                const saved = localStorage.getItem('nano-reader-config');
+                if (saved) {
+                    const parsed = JSON.parse(saved);
+                    // 合并配置，确保不丢失默认值
+                    this.config = { ...this.config, ...parsed };
+                    // 校验数值范围
+                    this.config.fontSize = Math.max(12, Math.min(28, this.config.fontSize));
+                    this.config.readerWidth = Math.max(400, Math.min(1200, this.config.readerWidth));
+                }
+            } catch (e) {
+                console.error('加载配置失败:', e);
+            }
+        },
+        
+        saveConfig() {
+            try {
+                localStorage.setItem('nano-reader-config', JSON.stringify(this.config));
+            } catch (e) {
+                console.error('保存配置失败:', e);
+            }
+        },
+        
+        // 保存当前阅读进度
+        saveProgress() {
+            if (this.bookIdentifier && this.currentSpineIndex > 0) {
+                this.config.readingProgress[this.bookIdentifier] = this.currentSpineIndex;
+                this.saveConfig();
+            }
+        },
+        
+        // 读取上次阅读进度
+        getLastProgress(bookId) {
+            return this.config.readingProgress[bookId] || 0;
+        },
+        
         // ===== 初始化 =====
         init() {
-            this.$watch('theme', val => localStorage.setItem('nano-theme', val));
-            this.$watch('fontSize', val => {
-                localStorage.setItem('nano-fontsize', val);
+            // 加载保存的配置
+            this.loadConfig();
+            
+            // 监听配置变化，自动应用
+            this.$watch('config.fontSize', () => {
                 this.applyStyles();
             });
-            this.$watch('readerWidth', val => {
-                localStorage.setItem('nano-width', val);
+            
+            this.$watch('config.readerWidth', () => {
                 this.resizeViewer();
             });
+            
+            // 页面关闭前保存进度
+            window.addEventListener('beforeunload', () => {
+                this.saveProgress();
+            });
+            
+            // 定期自动保存进度（每 30 秒）
+            setInterval(() => this.saveProgress(), 30000);
+            
+            console.log('配置已加载:', this.config);
         },
         
         // ===== 文件处理 =====
@@ -71,14 +139,21 @@ document.addEventListener('alpine:init', () => {
                 this.spineItems = this.book.spine.spineItems || [];
                 this.bookTitle = this.book.packaging?.metadata?.title || file.name.replace('.epub', '');
                 
+                // 生成书籍标识（用于保存进度）
+                this.bookIdentifier = this.bookTitle + '_' + file.size;
+                
                 // 解析目录
                 const nav = await this.book.loaded.navigation;
                 this.toc = this.parseToc(nav.toc || []);
                 
                 this.bookLoaded = true;
                 
-                // 加载第一章
-                this.$nextTick(() => this.loadChapter(0));
+                // 恢复上次阅读进度
+                const lastProgress = this.getLastProgress(this.bookIdentifier);
+                const startChapter = Math.min(lastProgress, this.spineItems.length - 1);
+                
+                // 加载章节
+                this.$nextTick(() => this.loadChapter(startChapter));
                 
             } catch (err) {
                 console.error('加载失败:', err);
@@ -188,8 +263,24 @@ document.addEventListener('alpine:init', () => {
         cycleTheme() {
             const themes = ['light', 'dark', 'sepia'];
             const idx = themes.indexOf(this.theme);
-            this.theme = themes[(idx + 1) % themes.length];
+            this.config.theme = themes[(idx + 1) % themes.length];
+            this.saveConfig();
             this.$nextTick(() => this.applyStyles());
+        },
+        
+        // 重置所有配置
+        resetConfig() {
+            if (confirm('确定要重置所有设置吗？')) {
+                this.config = {
+                    theme: 'light',
+                    fontSize: 18,
+                    readerWidth: 800,
+                    readingProgress: {}
+                };
+                this.saveConfig();
+                this.applyStyles();
+                this.resizeViewer();
+            }
         },
         
         resizeViewer() {

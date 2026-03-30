@@ -108,13 +108,15 @@
 
     <!-- 设置面板 -->
     <div id="fontPanel" class="font-panel" x-show="settingsOpen" @click.outside="settingsOpen = false" x-transition.opacity.scale.duration.200ms>
-        <button class="btn" @click="fontSize -= 1">A-</button>
+        <button class="btn" @click="fontSize--">A-</button>
         <span x-text="fontSize"></span>
-        <button class="btn" @click="fontSize += 1">A+</button>
+        <button class="btn" @click="fontSize++">A+</button>
         <span class="panel-divider">|</span>
         <button class="btn" @click="readerWidth -= 50">◀</button>
         <span x-text="readerWidth + 'px'"></span>
         <button class="btn" @click="readerWidth += 50">▶</button>
+        <span class="panel-divider">|</span>
+        <button class="btn" @click="resetConfig()" title="重置设置">↺</button>
     </div>
 
     <!-- 依赖 -->
