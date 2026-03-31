@@ -47,7 +47,7 @@
                         :class="{ 'active': currentSpineIndex === item.spineIndex }"
                         :style="`padding-left: ${12 + item.level * 16}px`"
                     >
-                        <div class="toc-item-header" @click="item.children.length ? toggleItem(item) : loadChapter(item.spineIndex)">
+                        <div class="toc-item-header" @click="loadChapter(item.spineIndex)">
                             <span 
                                 class="toc-toggle" 
                                 :class="{ 
